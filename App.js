@@ -6,24 +6,14 @@ import {
   TextInput,
   Button,
   KeyboardAvoidingView,
+  Alert,
+  AsyncStorage,
 } from "react-native";
 import * as SQLite from "expo-sqlite";
+import db from "./services/db";
 import Items from "./components/Items";
-// import * as FileSystem from "expo-file-system";
-
-const db = SQLite.openDatabase("db.db", "1.0", "test", 2 * 1024 * 1024);
 
 console.clear();
-
-const id = () => (Math.random() * 10000) | 0;
-
-// FileSystem.getFreeDiskStorageAsync().then((freeDiskStorage) => {
-//   // Android: 17179869184
-//   // iOS: 17179869184
-//   console.log(freeDiskStorage);
-// });
-
-// console.log(`${FileSystem.documentDirectory}SQLite/db.db`);
 
 export default function App() {
   const [data, setData] = useState([]);
@@ -33,55 +23,46 @@ export default function App() {
     let mounted = true;
 
     fetch();
+    create_table();
 
     return () => (mounted = false);
   }, []);
 
-  // function create_table() {
-  //   db.transaction((tx) => {
-  //     tx.executeSql(
-  //       "CREATE TABLE IF NOT EXISTS owes(id integer primary key not null, name text)"
-  //     );
-  //   });
-  // }
-
-  // function delete_table() {
-  //   db.transaction((tx) => {
-  //     tx.executeSql("DELETE FROM owes");
-  //   });
-  // }
-
   function fetch() {
-    db.transaction((tx) => {
-      tx.executeSql(
-        "SELECT * FROM owes ORDER BY name",
-        [],
-        (_, { rows: { _array } }) => {
-          setData(_array);
-        }
-      );
-    });
+    db.fetch()
+      .then((rows) => setData(rows))
+      .catch((error) => Alert.alert(error));
   }
 
   function add() {
-    db.transaction((tx) => {
-      tx.executeSql(
-        "INSERT INTO owes(id, name) VALUES(?,?)",
-        [id(), value],
-        (_, result) => {
-          setValue("");
-          fetch();
-        }
-      );
-    });
+    db.add(value)
+      .then(() => {
+        setValue("");
+        fetch();
+      })
+      .catch((error) => Alert.alert(error));
   }
 
-  function onDelete(id) {
-    db.transaction((tx) => {
-      tx.executeSql("DELETE FROM owes WHERE id = ?", [id], (_, result) => {
-        fetch();
-      });
-    });
+  function remove(id) {
+    db.delete(id)
+      .then(fetch)
+      .catch((error) => Alert.alert(error));
+  }
+
+  function create_table() {
+    async function check_table() {
+      let check = await AsyncStorage.getItem("table_exisis");
+
+      if (!check) {
+        db.create_table()
+          .then(() => {
+            Alert.alert("Table created");
+          })
+          .catch((error) => Alert.alert(error));
+      }
+    }
+
+    check_table();
   }
 
   return (
@@ -95,7 +76,7 @@ export default function App() {
         </View>
         {data &&
           data.map(({ id, name }) => (
-            <Items key={id} id={id} name={name} onDelete={onDelete} />
+            <Items key={id} id={id} name={name} onDelete={remove} />
           ))}
 
         <TextInput
